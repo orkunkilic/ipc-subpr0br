@@ -21,7 +21,7 @@ interface TransactionsSchema {
 
 interface BlocksSchema {
     id: number;
-    height: number;    
+    Height: number;    
 }
 
 interface AccountsSchema {
@@ -133,13 +133,14 @@ export const insert = async (
     return insert;
 }
 
-// TODO: make query function
 export const query = async (
     db: Database,
     statement: string,
-    values: any[]
+    colName: any
 ) => {
-    // TODO: create query 
+    const {results} = await db.prepare(statement)
+    .all(colName);
 
-    // Return all matching rows
+    console.log(results);
+    return(results);
 };
