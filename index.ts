@@ -3,10 +3,10 @@ import { LotusClient, WsJsonRpcConnector } from 'filecoin.js';
 require('dotenv').config();
 
 (async () => {
-  let transactionDB, blockDB, accountDB;
+  let db;
 
   try {
-    [transactionDB, blockDB, accountDB] = await setUpDBs();
+    db = await setUpDBs();
   } catch (e) {
     console.log("Error setting up DBs: " + e);
     return;
@@ -16,7 +16,7 @@ require('dotenv').config();
   // convert it true to create tables, then false
   if (false) {
     try {
-      [transactionTable, blockTable, accountTable] = await createTables(transactionDB, blockDB, accountDB);
+      [transactionTable, blockTable, accountTable] = await createTables(db);
     } catch (e) {
       console.log("Error creating tables: " + e);
       return;
@@ -38,7 +38,7 @@ require('dotenv').config();
   lotusClient.chain.chainNotify(async (updates: any) => {
     updates.forEach(async (update: any) => {
         console.log("Height: " + update.Val.Height);
-        
+        console.log((update))
         // TODO: insert block into block table
 
         lotusClient.chain.getBlockMessages(update.Val.Cids[0]).then((messages: any) => {

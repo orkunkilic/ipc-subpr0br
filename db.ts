@@ -33,24 +33,22 @@ export const setUpDBs = async () => {
     const signer = wallet.connect(provider);
   
     // Default to grabbing a wallet connection in a browser
-    const transactionDB = new Database<TransactionsSchema>({signer});
-    const blockDB = new Database<BlocksSchema>({signer});
-    const accountDB = new Database<AccountsSchema>({signer});
+    const db = new Database({signer});
+//     const blockDB = new Database<BlocksSchema>({signer});
+//  const accountDB = new Database<AccountsSchema>({signer});
 
-    return [transactionDB, blockDB, accountDB]
+    return db
 }
 
 export const createTables = async (
-    transactionDB: Database<TransactionsSchema>,
-    blockDB: Database<BlocksSchema>,
-    accountDB: Database<AccountsSchema>
+  db: Database
 ) => {
   // This is the table's `prefix`; a custom table value prefixed as part of the table's name
   const prefix: string = "transactions";
 
   console.log("Creating a table...");
 
-  const { meta: createTx } = await transactionDB
+  const { meta: createTx } = await db
     .prepare(
       `CREATE TABLE ${prefix} (
         id INTEGER PRIMARY KEY,
@@ -76,7 +74,7 @@ export const createTables = async (
 };
 
 export const insert = async (
-    db: Database<TransactionsSchema> | Database<BlocksSchema> | Database<AccountsSchema>,
+    db: Database,
     statement: string,
     values: any[]
 ) => {
