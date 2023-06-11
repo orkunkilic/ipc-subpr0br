@@ -31,30 +31,29 @@ interface AccountsSchema {
     Balances: number;
 }
 
-export const setUpDBs = async () => {
+export const setUpDB = async () => {
     const wallet = new Wallet(privateKey!);
     const provider = new providers.JsonRpcProvider("http://127.0.0.1:8545"); // Local tableland (hardhat) node
     const signer = wallet.connect(provider);
   
     // Default to grabbing a wallet connection in a browser
-    const transactionDB = new Database({signer});
-    const blockDB = new Database({signer});
-    const accountDB = new Database({signer});
+    const db = new Database({signer});
 
-    return [transactionDB,blockDB,accountDB]
+    return db
 }
 
-export const createTrancastionTable = async (
-  transactionDB: Database
+export const createTransactionsTable = async (
+  db: Database
 ) => {
   // This is the table's `prefix`; a custom table value prefixed as part of the table's name
   const transactionsPrefix: string = "transactions";
   console.log("Creating a transaction table ...");
 
-  const { meta: createTransactionsTx } = await transactionDB
+  const { meta: createTransactionsTx } = await db
     .prepare(
       `CREATE TABLE ${transactionsPrefix} (
         id INTEGER PRIMARY KEY,
+        block_id TEXT,
         version INTEGER,
         "to" TEXT,
         "from" TEXT,
@@ -70,19 +69,17 @@ export const createTrancastionTable = async (
     .run();
 
   const { name: transactionName } = createTransactionsTx.txn!;
-
-  // TODO: create blocks/id,nmb,height and accounts/add,nonce,blc tables
   
-  return [transactionName, '', '']
+  return transactionName;
 };
 export const createBlocksTable = async (
-  blockDB: Database
+  db: Database
 ) => {
   // This is the table's `prefix`; a custom table value prefixed as part of the table's name
   const blocksPrefix: string = "blocks"
   console.log("Creating a blocks table...");
 
-  const { meta: createBlocksTx } = await blockDB
+  const { meta: createBlocksTx } = await db
   .prepare(
     `CREATE TABLE ${blocksPrefix} (
       id INTEGER PRIMARY KEY,
@@ -91,19 +88,18 @@ export const createBlocksTable = async (
   ).run();
   const {name: blocksName} = createBlocksTx.txn!;
   
-  return [blocksName,'','']
+  return blocksName;
 };
 
 export const createAccountsTable = async (
-  accountDB: Database
+  db: Database
 ) => {
   // This is the table's `prefix`; a custom table value prefixed as part of the table's name
-  const blocksPrefix: string = "accounts"
   const accountsPrefix: string = "accounts"
 
   console.log("Creating a accounts table...");
 
-  const { meta: createAccountsTx} = await accountDB
+  const { meta: createAccountsTx} = await db
   .prepare(
     `CREATE TABLE ${accountsPrefix} (
       id INTEGER PRIMARY KEY,
@@ -114,7 +110,7 @@ export const createAccountsTable = async (
   ).run();
   const{ name: accountsName} = createAccountsTx.txn!;
   
-  return [accountsName,'','']
+  return accountsName;
 };
 
 export const insert = async (
@@ -125,7 +121,7 @@ export const insert = async (
     console.log("Inserting a row into the table...");
     
     // Insert a row into the table
-    const { meta: insert, results } = await db
+    const { meta: insert } = await db
         .prepare(statement)
         .bind(...values)
         .run();
@@ -134,5 +130,16 @@ export const insert = async (
     await insert.txn?.wait();
     
     // Return the inserted row's ID
-    return [insert, results];
+    return insert;
 }
+
+// TODO: make query function
+export const query = async (
+    db: Database,
+    statement: string,
+    values: any[]
+) => {
+    // TODO: create query 
+
+    // Return all matching rows
+};
