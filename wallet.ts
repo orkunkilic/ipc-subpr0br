@@ -1,5 +1,5 @@
-const { default: BigNumber } = require('bignumber.js');
-const { LotusClient, WsJsonRpcConnector, LotusWalletProvider } = require('filecoin.js');
+import BigNumber from'bignumber.js';
+import { LotusClient, WsJsonRpcConnector, LotusWalletProvider } from 'filecoin.js';
 require('dotenv').config();
 
 (async () => {
