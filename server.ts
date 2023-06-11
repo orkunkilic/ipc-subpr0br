@@ -1,6 +1,5 @@
-const express = require('express');
+import express from 'express';
 import { query, setUpDB } from './db';
-import {transactionTable, blockTable, accountTable} from './index';
 
 const db = setUpDB();
 const app = express()
@@ -11,12 +10,12 @@ app.get('/blocks', async (req: Request, res: Response) => {
     const colName = req.query.colName as string;
     try {
     let statement = `SELECT ${colName ? colName: '*'} FROM blockTable`;
-    const results = await query(db, statement, colName);
+    const results = await query(await db, statement, colName);
 
     res.json(results);
     } catch (e) {
         console.log("Error getting blocks: " + e);
-        return;
+        res.status(500).json({ error: 'An error occurred while querying the blocks table' });
     }
   })
   
