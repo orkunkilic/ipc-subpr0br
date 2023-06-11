@@ -38,7 +38,7 @@ require('dotenv').config();
     }
     else {
         console.log("Tables already exist");
-        transactionTable = "transactions_31337_3";
+        transactionTable = "transactions_31337";
         blockTable = "blocks_31337";
         accountTable = "accounts_31337";
     }
