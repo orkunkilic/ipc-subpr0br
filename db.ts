@@ -20,11 +20,15 @@ interface TransactionsSchema {
 }
 
 interface BlocksSchema {
-    // TODO: add block schema
+    id: number;
+    height: number;    
 }
 
 interface AccountsSchema {
-    // TODO: add account schema
+    id: number;
+    To: string;
+    Nonce: number;
+    Balances: number;
 }
 
 export const setUpDBs = async () => {
@@ -33,24 +37,23 @@ export const setUpDBs = async () => {
     const signer = wallet.connect(provider);
   
     // Default to grabbing a wallet connection in a browser
-    const db = new Database({signer});
-//     const blockDB = new Database<BlocksSchema>({signer});
-//  const accountDB = new Database<AccountsSchema>({signer});
+    const transactionDB = new Database({signer});
+    const blockDB = new Database({signer});
+    const accountDB = new Database({signer});
 
-    return db
+    return [transactionDB,blockDB,accountDB]
 }
 
-export const createTables = async (
-  db: Database
+export const createTrancastionTable = async (
+  transactionDB: Database
 ) => {
   // This is the table's `prefix`; a custom table value prefixed as part of the table's name
-  const prefix: string = "transactions";
+  const transactionsPrefix: string = "transactions";
+  console.log("Creating a transaction table ...");
 
-  console.log("Creating a table...");
-
-  const { meta: createTx } = await db
+  const { meta: createTransactionsTx } = await transactionDB
     .prepare(
-      `CREATE TABLE ${prefix} (
+      `CREATE TABLE ${transactionsPrefix} (
         id INTEGER PRIMARY KEY,
         version INTEGER,
         "to" TEXT,
@@ -66,11 +69,52 @@ export const createTables = async (
     )
     .run();
 
-  const { name: transactionName } = createTx.txn!;
+  const { name: transactionName } = createTransactionsTx.txn!;
 
-  // TODO: create blocks and accounts tables
-
+  // TODO: create blocks/id,nmb,height and accounts/add,nonce,blc tables
+  
   return [transactionName, '', '']
+};
+export const createBlocksTable = async (
+  blockDB: Database
+) => {
+  // This is the table's `prefix`; a custom table value prefixed as part of the table's name
+  const blocksPrefix: string = "blocks"
+  console.log("Creating a blocks table...");
+
+  const { meta: createBlocksTx } = await blockDB
+  .prepare(
+    `CREATE TABLE ${blocksPrefix} (
+      id INTEGER PRIMARY KEY,
+      height INTEGER
+    )`
+  ).run();
+  const {name: blocksName} = createBlocksTx.txn!;
+  
+  return [blocksName,'','']
+};
+
+export const createAccountsTable = async (
+  accountDB: Database
+) => {
+  // This is the table's `prefix`; a custom table value prefixed as part of the table's name
+  const blocksPrefix: string = "accounts"
+  const accountsPrefix: string = "accounts"
+
+  console.log("Creating a accounts table...");
+
+  const { meta: createAccountsTx} = await accountDB
+  .prepare(
+    `CREATE TABLE ${accountsPrefix} (
+      id INTEGER PRIMARY KEY,
+      "to" TEXT,
+      nonce INTEGER,
+      balances INTEGER
+    )`
+  ).run();
+  const{ name: accountsName} = createAccountsTx.txn!;
+  
+  return [accountsName,'','']
 };
 
 export const insert = async (

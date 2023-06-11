@@ -1,12 +1,14 @@
-import { createTables, setUpDBs, insert } from './db';
+import { createAccountsTable,createBlocksTable,createTrancastionTable, setUpDBs, insert } from './db';
 import { LotusClient, WsJsonRpcConnector } from 'filecoin.js';
 require('dotenv').config();
 
 (async () => {
-  let db;
+  let transactionDB;
+  let blockDB;
+  let accountDB;
 
   try {
-    db = await setUpDBs();
+    [transactionDB,blockDB,accountDB] = await setUpDBs();
   } catch (e) {
     console.log("Error setting up DBs: " + e);
     return;
@@ -14,9 +16,12 @@ require('dotenv').config();
   let transactionTable, blockTable, accountTable;
 
   // convert it true to create tables, then false
-  if (false) {
+  if (true) {
     try {
-      [transactionTable, blockTable, accountTable] = await createTables(db);
+      [transactionTable] = await createTrancastionTable(transactionDB);
+      [blockTable] = await createBlocksTable(blockDB);
+      [accountTable] = await createAccountsTable(accountDB);
+
     } catch (e) {
       console.log("Error creating tables: " + e);
       return;
@@ -34,8 +39,9 @@ require('dotenv').config();
 
   const connector = new WsJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
   const lotusClient = new LotusClient(connector);
-
+  console.log("aa")
   lotusClient.chain.chainNotify(async (updates: any) => {
+    console.log("b")
     updates.forEach(async (update: any) => {
         console.log("Height: " + update.Val.Height);
         console.log((update))
