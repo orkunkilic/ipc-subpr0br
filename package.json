@@ -1,6 +1,11 @@
 {
   "dependencies": {
+    "@tableland/sdk": "^4.3.2",
     "dotenv": "^16.1.4",
     "filecoin.js": "^0.0.5-alpha"
+  },
+  "devDependencies": {
+    "@composedb/devtools": "^0.4.4",
+    "@composedb/devtools-node": "^0.4.4"
   }
 }
