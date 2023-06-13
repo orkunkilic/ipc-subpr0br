@@ -7,7 +7,7 @@ dotenv.config();
 const privateKey = process.env.PRIVATE_KEY;
 
 interface TransactionsSchema {
-    id: number;
+    id: string;
     Version?: number;
     To: string;
     From: string;
@@ -21,13 +21,12 @@ interface TransactionsSchema {
 }
 
 interface BlocksSchema {
-    id: number;
+    id: string;
     Height: number;    
 }
 
 interface AccountsSchema {
-    id: number;
-    To: string;
+    Address: string;
     Nonce: number;
     Balances: number;
 }
@@ -54,8 +53,7 @@ export const createTransactionsTable = async (
   const { meta: createTransactionsTx } = await db
     .prepare(
       `CREATE TABLE ${transactionsPrefix} (
-        id INTEGER PRIMARY KEY,
-        block_id TEXT,
+        id TEXT PRIMARY KEY,
         version INTEGER,
         "to" TEXT,
         "from" TEXT,
@@ -104,8 +102,7 @@ export const createAccountsTable = async (
   const { meta: createAccountsTx} = await db
   .prepare(
     `CREATE TABLE ${accountsPrefix} (
-      id INTEGER PRIMARY KEY,
-      "to" TEXT,
+      address TEXT PRIMARY KEY,
       nonce INTEGER,
       balances INTEGER
     )`
@@ -121,7 +118,7 @@ export const insert = async (
     values: any[]
 ) => {
     console.log("Inserting a row into the table...");
-    
+    try {
     // Insert a row into the table
     const { meta: insert } = await db
         .prepare(statement)
@@ -133,7 +130,11 @@ export const insert = async (
     
     // Return the inserted row's ID
     return insert;
-}
+    } catch (e) {
+        console.log("error:" + e);
+        return "error";
+    }
+};
 
 export const query = async (
     db: Database,
@@ -146,3 +147,27 @@ export const query = async (
     console.log(results);
     return(results);
 };
+
+export const update = async (
+    db: Database,
+    statement: string,
+    values: any[]
+) => {
+    console.log("Updating a row into the table...");
+    try {
+    // Update a row into the table
+    const { meta: update } = await db
+        .prepare(statement)
+        .bind(...values)
+        .run();
+    
+    // Wait for transaction finality
+    await update.txn?.wait();
+    
+    // Return the updated row's ID
+    return update;
+    } catch (e) {
+        console.log("error:" + e);
+        return "error";
+    }
+}
