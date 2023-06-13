@@ -1,6 +1,6 @@
 import { BlockHeader, BlockMessages, HeadChange, Message, SignedMessage } from 'filecoin.js/builds/dist/providers/Types';
 import { createAccountsTable,createBlocksTable,createTransactionsTable, setUpDB, insert } from './db';
-import { LotusClient, WsJsonRpcConnector } from 'filecoin.js';
+import { HttpJsonRpcConnector, LotusClient, WsJsonRpcConnector } from 'filecoin.js';
 import { Database } from '@tableland/sdk';
 require('dotenv').config();
 
@@ -37,7 +37,7 @@ require('dotenv').config();
     accountTable = "accounts_31337_4";
   }
 
-  const connector = new WsJsonRpcConnector({ url: 'https://api.spacenet.node.glif.io/rpc/v1'});
+  const connector = new HttpJsonRpcConnector({ url: 'https://api.spacenet.node.glif.io/rpc/v1'});
   const lotusClient = new LotusClient(connector);
   console.log("aa")
   lotusClient.chain.chainNotify(async (updates: HeadChange[]) => {

@@ -1,10 +1,10 @@
 import BigNumber from'bignumber.js';
-import { LotusClient, WsJsonRpcConnector, LotusWalletProvider } from 'filecoin.js';
+import { LotusClient, WsJsonRpcConnector, LotusWalletProvider, HttpJsonRpcConnector } from 'filecoin.js';
 require('dotenv').config();
 
 (async () => {
 
-  const connector = new WsJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
+  const connector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
 
   const lotusClient = new LotusClient(connector);
   const lotusProvider = new LotusWalletProvider(lotusClient);
