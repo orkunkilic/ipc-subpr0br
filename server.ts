@@ -16,7 +16,7 @@ app.get('/block', async (req: Request, res: Response) => {
     // FIX: your query is wrong.
     // Example select -> SELECT * FROM blockTable WHERE id = 1 || SELECT height FROM blockTable WHERE id = 1
     let statement = `SELECT ${blockId ? blockId: '*'} FROM blocks_31337_3`; //CHANGE BLOCKTABLE NAME
-    const results = await query(await db, statement, blockId);
+    const results = await query(await db, statement);
 
     res.json(results);
   } catch (e) {

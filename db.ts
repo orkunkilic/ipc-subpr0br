@@ -1,9 +1,18 @@
-import { Database } from "@tableland/sdk";
+import { Database, Statement } from "@tableland/sdk";
 import { BigNumber } from 'bignumber.js';
 import { Wallet, providers } from "ethers";
 import { NonceManager } from "@ethersproject/experimental";
 import * as dotenv from "dotenv";
+import { Message } from "filecoin.js/builds/dist/providers/Types";
 dotenv.config();
+
+declare module 'filecoin.js/builds/dist/providers/Types' {
+  interface Message {
+    CID: Cid;
+  }
+}
+
+
 const privateKey = process.env.PRIVATE_KEY;
 
 interface TransactionsSchema {
@@ -53,7 +62,8 @@ export const createTransactionsTable = async (
   const { meta: createTransactionsTx } = await db
     .prepare(
       `CREATE TABLE ${transactionsPrefix} (
-        id TEXT PRIMARY KEY,
+        id TEXT,
+        block_id TEXT,
         version INTEGER,
         "to" TEXT,
         "from" TEXT,
@@ -63,7 +73,8 @@ export const createTransactionsTable = async (
         gas_fee_cap INTEGER,
         gas_premium INTEGER,
         method INTEGER,
-        params TEXT
+        params TEXT,
+        PRIMARY KEY (id, block_id)
       );`
     )
     .run();
@@ -104,7 +115,7 @@ export const createAccountsTable = async (
     `CREATE TABLE ${accountsPrefix} (
       address TEXT PRIMARY KEY,
       nonce INTEGER,
-      balances INTEGER
+      balance INTEGER
     )`
   ).run();
   const{ name: accountsName} = createAccountsTx.txn!;
@@ -112,12 +123,30 @@ export const createAccountsTable = async (
   return accountsName;
 };
 
+export const createCursorTable = async (
+  db: Database
+) => {
+  // This is the table's `prefix`; a custom table value prefixed as part of the table's name
+  const cursorPrefix: string = "cursor"
+
+  console.log("Creating a cursor table...");
+
+  const { meta: createCursorTx} = await db
+  .prepare(
+    `CREATE TABLE ${cursorPrefix} (
+      height INTEGER
+    )`
+  ).run();
+  const{ name: cursorName} = createCursorTx.txn!;
+  
+  return cursorName;
+};
+
 export const insert = async (
     db: Database,
     statement: string,
     values: any[]
 ) => {
-    console.log("Inserting a row into the table...");
     try {
     // Insert a row into the table
     const { meta: insert } = await db
@@ -138,13 +167,11 @@ export const insert = async (
 
 export const query = async (
     db: Database,
-    statement: string,
-    colName: any
+    statement: string
 ) => {
     const {results} = await db.prepare(statement)
-    .all(colName);
+    .all();
 
-    console.log(results);
     return(results);
 };
 
@@ -153,7 +180,6 @@ export const update = async (
     statement: string,
     values: any[]
 ) => {
-    console.log("Updating a row into the table...");
     try {
     // Update a row into the table
     const { meta: update } = await db
@@ -170,4 +196,110 @@ export const update = async (
         console.log("error:" + e);
         return "error";
     }
+}
+
+export const batchProcess = async (
+    db: Database,
+    statements: Statement[]
+) => {
+    try {
+        const results = await db.batch(statements);
+
+        return results;
+    } catch (e) {
+        console.log("error:" + e);
+        
+        return false;
+    }
+}
+
+export const processAccountChanges = async (
+  message: Message,
+  db: Database,
+  accountsTable: string,
+) => {
+  console.log("Processing account changes for message: " + message.CID['/']);
+
+  const from = message.From;
+  const to = message.To;
+  const value = new BigNumber(message.Value);
+  const gasFeeCap = new BigNumber(message.GasFeeCap);
+  const gasPremium = new BigNumber(message.GasPremium);
+  const gasLimit = new BigNumber(message.GasLimit);
+  
+  const fromAccountQuery = await query(db, `SELECT * FROM ${accountsTable} WHERE address="${from}"`);
+  const toAccountQuery = await query(db, `SELECT * FROM ${accountsTable} WHERE address="${to}"`);
+
+  const fromAccount = fromAccountQuery[0] as any;
+  const toAccount = toAccountQuery[0] as any;
+
+  const gasPaid = gasFeeCap.times(gasLimit);
+  const totalPaid = value.plus(gasPaid);
+
+  const createStatements: Statement[] = [];
+
+  if (!fromAccount) {
+    console.log("Creating account for: " + from);
+    createStatements.push(db.prepare(`INSERT INTO ${accountsTable} (address, nonce, balance) VALUES (?, ?, ?)`).bind([from, 0, 0]));
+  }
+
+  if (!toAccount) {
+    console.log("Creating account for: " + to);
+    createStatements.push(db.prepare(`INSERT INTO ${accountsTable} (address, nonce, balance) VALUES (?, ?, ?)`).bind([to, 0, 0]));
+  }
+  if (createStatements.length > 0) {
+    const createResults = await batchProcess(db, createStatements);
+
+    if (!createResults) {
+      console.log("Error creating accounts");
+      return false;
+    }
+
+    try {
+      await Promise.all(createResults.map(result => result.meta?.txn?.wait()));
+    } catch (e) {
+      console.log("Error waiting for account creation");
+      return false;
+    }
+  }
+
+  const fromBalance = new BigNumber(fromAccount?.balances || 0);
+  const toBalance = new BigNumber(toAccount?.balances || 0);
+
+  const newFromBalance = fromBalance.minus(totalPaid);
+  const newToBalance = toBalance.plus(value);
+
+  const batchStatements: Statement[] = [];
+
+  batchStatements.push(db.prepare(`UPDATE ${accountsTable} SET balance = ? WHERE address = ?`).bind([newFromBalance, from]));
+  batchStatements.push(db.prepare(`UPDATE ${accountsTable} SET balance = ? WHERE address = ?`).bind([newToBalance, to]));
+
+  // update nonce
+  const newNonce = (fromAccount?.nonce || 0) + 1;
+  batchStatements.push(db.prepare(`UPDATE ${accountsTable} SET nonce = ? WHERE address = ?`).bind([newNonce, from]));
+
+  try {
+    const results = await batchProcess(db, batchStatements);
+
+    if (!results) {
+      console.log("Error updating accounts");
+      return false;
+    }
+
+    const waitAll = results.map((result) => result.meta?.txn?.wait());
+
+    console.log("Waiting for account updates to be mined...");
+    try {
+      await Promise.all(waitAll);
+    } catch (e) {
+      console.log("Error waiting for account updates to be mined");
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.log("error:" + e);
+    
+    return false;
+  }
 }

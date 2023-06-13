@@ -1,7 +1,7 @@
 import { BlockHeader, BlockMessages, Cid, HeadChange, Message, SignedMessage } from 'filecoin.js/builds/dist/providers/Types';
-import { createAccountsTable,createBlocksTable,createTransactionsTable, setUpDB, insert, query, update } from './db';
+import { createAccountsTable,createBlocksTable,createTransactionsTable, setUpDB, insert, query, update, createCursorTable, processAccountChanges, batchProcess } from './db';
 import { HttpJsonRpcConnector, LotusClient, WsJsonRpcConnector } from 'filecoin.js';
-import { Database } from '@tableland/sdk';
+import { Database, Statement } from '@tableland/sdk';
 import { BigNumber } from 'bignumber.js';
 require('dotenv').config();
 
@@ -20,7 +20,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     console.log("Error setting up DBs: " + e);
     return;
   }
-  let transactionTable: string, blockTable: string, accountTable: string;
+  let transactionTable: string, blockTable: string, accountTable: string, cursorTable: string;
 
   // convert it true to create tables, then false
   if (true) {
@@ -28,7 +28,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
       transactionTable = await createTransactionsTable(db);
       blockTable = await createBlocksTable(db);
       accountTable = await createAccountsTable(db);
-
+      cursorTable = await createCursorTable(db);
     } catch (e) {
       console.log("Error creating tables: " + e);
       return;
@@ -37,6 +37,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     console.log(" transactionTable: " + transactionTable);
     console.log(" blockTable: " + blockTable);
     console.log(" accountTable: " + accountTable);
+    console.log(" cursorTable: " + cursorTable);
   } else {
     console.log("Tables already exist");
     transactionTable = "transactions_31337_2";
@@ -44,207 +45,140 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     accountTable = "accounts_31337_4";
   }
 
-  const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
+  // const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
+  const connector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
   const lotusClient = new LotusClient(connector);
-  let lastSyncBlockHeight = 0;
-  console.log("aa")
-  lotusClient.chain.chainNotify(async (updates: HeadChange[]) => {
-    console.log("checking height")
-    if (lastSyncBlockHeight === updates[0].Val.Height) {return;}
-    lastSyncBlockHeight = updates[0].Val.Height;
-    updates.forEach(async (singleUpdate: HeadChange) => {
-        console.log("Height: " + singleUpdate.Val.Height);
-        singleUpdate.Val.Blocks.forEach(async (block: BlockHeader, index: any) => {
-          const blockId = singleUpdate.Val.Cids[index];
-          console.log("Blocks: " + singleUpdate.Val.Blocks[index].Height);
-          console.log("blockId: " + blockId['/']);
-          lotusClient.chain.getBlockMessages(blockId).then((messages: BlockMessages) => {
 
-              let lastBlsTxId = "";
-              let lastSecpkTxId = "";
-              messages.BlsMessages.forEach(async (message: Message) => {
-                  console.log("blsforeach", message.CID['/']);
+  // wait for 5 seconds to let the everything start up
+  await new Promise(resolve => setTimeout(resolve, 5000));
 
-                  if(lastBlsTxId === message.CID['/']) { return; }
-                  lastBlsTxId = message.CID['/'];
-                  let blsTxVersion = message.Version;
-                  let blsTxTo = message.To;
-                  let blsTxFrom = message.From;
-                  let blsTxNonce = message.Nonce;
-                  let blsTxValue = message.Value;
-                  let blsTxGasLimit = message.GasLimit;
-                  let blsTxGasFeeCap = message.GasFeeCap;
-                  let blsTxGasPremium = message.GasPremium;
-                  let blsTxMethod = message.Method;
-                  let blsTxParams = "message.Params"; 
+  // let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || 645202; // we cannot query 0, rpc disallows it
+  let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || 0; // in local, party!
+  console.log("Last synced height: " + lastSyncedHeight);
 
-                  // insert into transaction table
-                  
-                  const insertBlsTxResult = await insert(
-                    db,
-                    `INSERT INTO ${transactionTable} (id, version, "to", "from", nonce, value, gas_limit, gas_fee_cap, gas_premium, method, params) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                      lastBlsTxId,
-                      blsTxVersion,
-                      blsTxTo,
-                      blsTxFrom,
-                      blsTxNonce,
-                      blsTxValue,
-                      blsTxGasLimit,
-                      blsTxGasFeeCap,
-                      blsTxGasPremium,
-                      blsTxMethod,
-                      blsTxParams
-                    ]
-                  );
-                  console.log("insertBlsTxResult: " + JSON.stringify(insertBlsTxResult));
-                  // TODO: calculate balance changes (include gas) and insert into account table
+  while (true) {
+    const head = await lotusClient.chain.getHead();
+    if (head.Height > lastSyncedHeight) {
+      for (let i = lastSyncedHeight + 1; i <= lastSyncedHeight + 51; i++) {
+        console.log("Syncing height: " + i);
+        const tipSet = await lotusClient.chain.getTipSetByHeight(i);
+        
+        const blockInsertStatements: Statement[] = [];
+        for (let j = 0; j <= tipSet.Blocks.length - 1; j++) {
+          const block = tipSet.Blocks[j];
+          const blockInsertStatement = db.prepare(`INSERT INTO ${blockTable} (id, height) VALUES (?, ?)`).bind(tipSet.Cids[j]['/'], block.Height);
+          blockInsertStatements.push(blockInsertStatement);
 
-                  const setFromAccountBalances = async (db: Database, addressTo: string, addressFrom: string) => {
-                    addressFrom = blsTxFrom;
-                    addressTo = blsTxTo;
-                  
-                    try {
-                      const results: any[] = await query(db, `SELECT balances FROM ${accountTable} WHERE address = "${addressFrom}"`, "");
-                      if (results.length > 0) {
-                        const prevFromBalance: BigNumber = new BigNumber(results[0].balances);
-                        console.log("prevFromBalance: " + prevFromBalance.toString());
-                  
-                        // Calculate the balance change based on gas fees and value
-                        const gasFees: BigNumber = new BigNumber(blsTxGasLimit).times(new BigNumber(blsTxGasPremium).plus(100));
-                        const balanceChange: BigNumber = new BigNumber(blsTxValue).plus(gasFees);
-                        console.log("balanceChange: " + balanceChange.toString());
-                  
-                        const newFromBalance: BigNumber = prevFromBalance.minus(balanceChange);
-                        console.log("newFromBalance: " + newFromBalance.toString());
-                  
-                        await update(db, `UPDATE ${accountTable} SET balances = ? WHERE address = ?`, [newFromBalance.toNumber(), addressFrom]);
-                      } else {
-                      }
-                    } catch (e) {
-                      const result = await insert(db, `INSERT INTO ${accountTable} (address, nonce, balances) VALUES (?, ?, ?)`, [addressFrom, 0, 0]);
-                      console.log(result);
-                    }
-                  };
-
-                  const setToAccountBalances = async (db: Database, addressTo: string, addressFrom: string) => {
-                    addressFrom = blsTxFrom;
-                    addressTo = blsTxTo;
-                    try {
-                      let prevToBalance: any = await query(db, `SELECT balances FROM ${accountTable} WHERE address = ${addressTo}`,addressTo);
-                      console.log("prevToBalance: " + prevToBalance);
-                      let newToBalance = prevToBalance + blsTxValue;
-                      console.log("newToBalance: " + newToBalance);
-                      return update(db, `UPDATE ${accountTable} SET balances = ? WHERE address = ?`, [newToBalance, addressTo]);
-                    } catch (e) {
-                      return insert(db, `INSERT INTO ${accountTable} (address, nonce, balances) VALUES (?, ?, ?)`, [addressTo, 0, 0]);
-                    }
-                  }
-                  setFromAccountBalances(db, blsTxTo, blsTxFrom);
-                 // setToAccountBalances(db, blsTxTo, blsTxFrom);
-
-              });
-              messages.SecpkMessages.forEach(async (message: SignedMessage) => {
-                  console.log("secpkforeach", message.Message.CID['/']);
-
-                  if(lastSecpkTxId === message.Message.CID['/']) { return; }
-                  lastSecpkTxId = message.Message.CID['/'];
-                  let secpkTxVersion = message.Message.Version;
-                  let secpkTxTo = message.Message.To;
-                  let secpkTxFrom = message.Message.From;
-                  let secpkTxNonce = message.Message.Nonce;
-                  let secpkTxValue = message.Message.Value;
-                  let secpkTxGasLimit = message.Message.GasLimit;
-                  let secpkTxGasFeeCap = message.Message.GasFeeCap;
-                  let secpkTxGasPremium = message.Message.GasPremium;
-                  let secpkTxMethod = message.Message.Method;
-                  let secpkTxParams = "message.Message.Params";
-
-                  // insert into transaction table
-                  const insertSecpkTxResult = await insert(
-                    db,
-                    `INSERT INTO ${transactionTable} (id, version, "to", "from", nonce, value, gas_limit, gas_fee_cap, gas_premium, method, params) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                      lastSecpkTxId,
-                      secpkTxVersion,
-                      secpkTxTo,
-                      secpkTxFrom,
-                      secpkTxNonce,
-                      secpkTxValue,
-                      secpkTxGasLimit,
-                      secpkTxGasFeeCap,
-                      secpkTxGasPremium,
-                      secpkTxMethod,
-                      secpkTxParams
-                    ]
-                  );
-                  console.log("insertSecpkTxResult: " + JSON.stringify(insertSecpkTxResult));
-
-                  // TODO: calculate balance changes (include gas) and insert into account table
-
-/*                   const setFromAccountBalances = async (db: Database, addressTo: string, addressFrom: string) => {
-                    addressFrom = secpkTxFrom;
-                    addressTo = secpkTxTo;
-                    try {
-                      let prevFromBalance: any = await query(db, `SELECT balances FROM ${accountTable} WHERE address = ?`,addressFrom);
-                      console.log("prevFromBalance: " + prevFromBalance);
-                      //amount of used gas not return from api
-                      let balanceChange = secpkTxValue.toNumber() + (secpkTxGasLimit * (secpkTxGasPremium.toNumber() + 100));
-                      console.log("balanceChange: " + balanceChange);
-                      let newFromBalance = prevFromBalance - balanceChange;
-                      console.log("newFromBalance: " + newFromBalance);
-                      return update(db, `UPDATE ${accountTable} SET balances = ? WHERE address = ?`, [newFromBalance, addressFrom]);
-                    } catch (e) {
-                      return insert(db, `INSERT INTO ${accountTable} (address, nonce, balances) VALUES (?, ?, ?)`, [addressFrom, 0, 0]);
-                    }
-                  };
-
-                  const setToAccountBalances = async (db: Database, addressTo: string, addressFrom: string) => {
-                    addressFrom = secpkTxFrom;
-                    addressTo = secpkTxTo;
-                    try {
-                      let prevToBalance: any = await query(db, `SELECT balances FROM ${accountTable} WHERE address = ?`,addressTo);
-                      console.log("prevToBalance: " + prevToBalance);
-                      let newToBalance = prevToBalance + secpkTxValue;
-                      console.log("newToBalance: " + newToBalance);
-                      return update(db, `UPDATE ${accountTable} SET balances = ? WHERE address = ?`, [newToBalance, addressTo]);
-                    } catch (e) {
-                      return insert(db, `INSERT INTO ${accountTable} (address, nonce, balances) VALUES (?, ?, ?)`, [addressTo, 0, 0]);
-                    }
-                  }
-                  setFromAccountBalances(db, secpkTxTo, secpkTxFrom);
-                  setToAccountBalances(db, secpkTxTo, secpkTxFrom); */
-              });
-          });
+          const blockMessages = await lotusClient.chain.getBlockMessages(tipSet.Cids[j]);
           
-          const insertBlockResult = await insert(
-            db,
-            `INSERT INTO ${blockTable} (id, height) VALUES (?, ?)`,
-            [
-              blockId['/'],
-              block.Height
-            ]
-          );
-          console.log("insertBlockResult: " + JSON.stringify(insertBlockResult));
-        });
+          const messageInsertStatements: Statement[] = [];
 
+          for(let k = 0; k <= blockMessages.BlsMessages.length - 1; k++) {
+            const message = blockMessages.BlsMessages[k];
+            const messageInsertStatement = db
+              .prepare(`INSERT INTO ${transactionTable} (id, block_id, version, "to", "from", nonce, value, gas_limit, gas_fee_cap, gas_premium, method, params) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+              .bind(
+                message.CID['/'],
+                tipSet.Cids[j]['/'],
+                message.Version,
+                message.To,
+                message.From,
+                message.Nonce,
+                message.Value,
+                message.GasLimit,
+                message.GasFeeCap,
+                message.GasPremium,
+                message.Method,
+                "message.Params"
+              );
+            messageInsertStatements.push(messageInsertStatement);
 
-    });
-  })
+            // process accounts
+            await processAccountChanges(message, db, accountTable);
+          };
+
+          for(let k = 0; k <= blockMessages.SecpkMessages.length - 1; k++) {
+            const message = blockMessages.SecpkMessages[k];
+            const messageInsertStatement = db
+              .prepare(`INSERT INTO ${transactionTable} (id, block_id, version, "to", "from", nonce, value, gas_limit, gas_fee_cap, gas_premium, method, params) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+              .bind(
+                message.Message.CID['/'],
+                tipSet.Cids[j]['/'],
+                message.Message.Version,
+                message.Message.To,
+                message.Message.From,
+                message.Message.Nonce,
+                message.Message.Value,
+                message.Message.GasLimit,
+                message.Message.GasFeeCap,
+                message.Message.GasPremium,
+                message.Message.Method,
+                "message.Message.Params"
+            );
+            messageInsertStatements.push(messageInsertStatement);
+
+            // process accounts
+            await processAccountChanges(message.Message, db, accountTable);
+          }
+
+          console.log("Inserting messages at block id: " + tipSet.Cids[j]['/']);
+          if (messageInsertStatements.length === 0) {
+            console.log("No messages to insert at block id: " + tipSet.Cids[j]['/']);
+            continue;
+          }
+
+          const results = await batchProcess(db, messageInsertStatements);
+          if (!results) {
+            console.log("Error inserting messages at block id: " + tipSet.Cids[j]['/'])
+            continue;
+          }
+
+          console.log("Waiting for messages to be mined at block id: " + tipSet.Cids[j]['/']);
+
+          try {
+            await Promise.all(results.map(result => result.meta?.txn?.wait()));
+          } catch (e) {
+            console.log("Error waiting for messages to be mined at block id: " + tipSet.Cids[j]['/']);
+            console.log(e);
+          }
+        }
+
+        console.log("Inserting blocks at height: " + i);
+        if (blockInsertStatements.length === 0) {
+          console.log("No blocks to insert at height: " + i);
+          continue;
+        }
+
+        const results = await batchProcess(db, blockInsertStatements);
+        if (!results) {
+          console.log("Error inserting blocks at height: " + i)
+          continue;
+        }
+
+        console.log("Waiting for blocks to be mined at height: " + i);
+
+        try {
+          await Promise.all(results.map(result => result.meta?.txn?.wait()));
+        } catch (e) {
+          console.log("Error waiting for blocks to be mined at height: " + i);
+          console.log(e);
+        }
+
+        console.log("==========================================");
+      }
+
+      console.log("Saving last synced height: " + head.Height);
+      await insert(
+        db,
+        `INSERT INTO ${cursorTable} (height) VALUES (?)`,
+        [head.Height]
+      );
+
+      lastSyncedHeight = head.Height;
+    }
+
+    console.log("Waiting for chain to sync");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
 
 })().then().catch();
-
-/* 
-export declare class Message {
-    Version?: number;
-    To: string;
-    From: string;
-    Nonce: number;
-    Value: BigNumber;
-    GasLimit: number;
-    GasFeeCap: BigNumber;
-    GasPremium: BigNumber;
-    Method: number;
-    Params: string;
-}
-*/
