@@ -1,8 +1,14 @@
-import { BlockHeader, BlockMessages, HeadChange, Message, SignedMessage } from 'filecoin.js/builds/dist/providers/Types';
+import { BlockHeader, BlockMessages, Cid, HeadChange, Message, SignedMessage } from 'filecoin.js/builds/dist/providers/Types';
 import { createAccountsTable,createBlocksTable,createTransactionsTable, setUpDB, insert } from './db';
 import { HttpJsonRpcConnector, LotusClient, WsJsonRpcConnector } from 'filecoin.js';
 import { Database } from '@tableland/sdk';
 require('dotenv').config();
+
+declare module 'filecoin.js/builds/dist/providers/Types' {
+  interface Message {
+    CID: Cid;
+  }
+}
 
 (async () => {
   let db: Database
@@ -58,7 +64,7 @@ require('dotenv').config();
                   console.log("blsforeach");
                   console.log(message);
                   // this cid is tx id 
-                  let blsTxId = message.Cid['/']; 
+                  let blsTxId = message.CID['/']; 
                   console.log("blsTxId: " + blsTxId);
                   // insert into transaction table
 
