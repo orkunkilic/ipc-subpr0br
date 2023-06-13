@@ -16,7 +16,7 @@ require('dotenv').config();
   let transactionTable: string, blockTable: string, accountTable: string;
 
   // convert it true to create tables, then false
-  if (false) {
+  if (true) {
     try {
       transactionTable = await createTransactionsTable(db);
       blockTable = await createBlocksTable(db);
@@ -37,26 +37,29 @@ require('dotenv').config();
     accountTable = "accounts_31337_4";
   }
 
-  const connector = new HttpJsonRpcConnector({ url: 'https://api.spacenet.node.glif.io/rpc/v1'});
+  const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
   const lotusClient = new LotusClient(connector);
+  let lastSyncBlockHeight = 0;
   console.log("aa")
   lotusClient.chain.chainNotify(async (updates: HeadChange[]) => {
-    console.log("b")
+    console.log("checking height")
+    if (lastSyncBlockHeight === updates[0].Val.Height) {return;}
+    lastSyncBlockHeight = updates[0].Val.Height;
     updates.forEach(async (update: HeadChange) => {
         console.log("Height: " + update.Val.Height);
-
         update.Val.Blocks.forEach(async (block: BlockHeader, index: any) => {
           const blockId = update.Val.Cids[index];
+          console.log("Blocks: " + update.Val.Blocks[index].Height);
+          console.log("blockId: " + blockId['/']);
           lotusClient.chain.getBlockMessages(blockId).then((messages: BlockMessages) => {
               console.log("All messages: ", messages);
               // look message types
               messages.BlsMessages.forEach((message: Message) => {
                   console.log("blsforeach");
-                  // blsMessages has type Message
                   console.log(message);
-                  const params = JSON.parse(message.Params);
-                  console.log("Params:"+params);
-                  // TODO: parse message, find transactions inside of it
+                  // this cid is tx id 
+                  let blsTxId = message.Cid['/']; 
+                  console.log("blsTxId: " + blsTxId);
                   // insert into transaction table
 
                   // TODO: calculate balance changes (include gas) and insert into account table

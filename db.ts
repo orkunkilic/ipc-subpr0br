@@ -1,6 +1,7 @@
 import { Database } from "@tableland/sdk";
 import { BigNumber } from 'bignumber.js';
 import { Wallet, providers } from "ethers";
+import { NonceManager } from "@ethersproject/experimental";
 import * as dotenv from "dotenv";
 dotenv.config();
 const privateKey = process.env.PRIVATE_KEY;
@@ -34,7 +35,8 @@ interface AccountsSchema {
 export const setUpDB = async () => {
     const wallet = new Wallet(privateKey!);
     const provider = new providers.JsonRpcProvider("http://127.0.0.1:8545"); // Local tableland (hardhat) node
-    const signer = wallet.connect(provider);
+    const baseSigner = wallet.connect(provider);
+    const signer = new NonceManager(baseSigner);
   
     // Default to grabbing a wallet connection in a browser
     const db = new Database({signer});
