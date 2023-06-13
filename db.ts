@@ -82,7 +82,7 @@ export const createBlocksTable = async (
   const { meta: createBlocksTx } = await db
   .prepare(
     `CREATE TABLE ${blocksPrefix} (
-      id INTEGER PRIMARY KEY,
+      id TEXT PRIMARY KEY,
       height INTEGER
     )`
   ).run();

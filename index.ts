@@ -16,7 +16,7 @@ require('dotenv').config();
   let transactionTable: string, blockTable: string, accountTable: string;
 
   // convert it true to create tables, then false
-  if (true) {
+  if (false) {
     try {
       transactionTable = await createTransactionsTable(db);
       blockTable = await createBlocksTable(db);
@@ -32,12 +32,12 @@ require('dotenv').config();
     console.log(" accountTable: " + accountTable);
   } else {
     console.log("Tables already exist");
-    transactionTable = "transactions_31337";
-    blockTable = "blocks_31337";
-    accountTable = "accounts_31337";
+    transactionTable = "transactions_31337_2";
+    blockTable = "blocks_31337_3";
+    accountTable = "accounts_31337_4";
   }
 
-  const connector = new WsJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
+  const connector = new WsJsonRpcConnector({ url: 'https://api.spacenet.node.glif.io/rpc/v1'});
   const lotusClient = new LotusClient(connector);
   console.log("aa")
   lotusClient.chain.chainNotify(async (updates: HeadChange[]) => {
@@ -51,15 +51,18 @@ require('dotenv').config();
               console.log("All messages: ", messages);
               // look message types
               messages.BlsMessages.forEach((message: Message) => {
+                  console.log("blsforeach");
                   // blsMessages has type Message
                   console.log(message);
-
+                  const params = JSON.parse(message.Params);
+                  console.log("Params:"+params);
                   // TODO: parse message, find transactions inside of it
                   // insert into transaction table
 
                   // TODO: calculate balance changes (include gas) and insert into account table
               });
               messages.SecpkMessages.forEach((message: SignedMessage) => {
+                  console.log("secpkforeach");
                   console.log(message.Message);
                   // secpkMessages.Message has type Message
 
@@ -77,7 +80,7 @@ require('dotenv').config();
               block.Height
             ]
           );
-          console.log(insertResult);
+          console.log("insertResult: " + JSON.stringify(insertResult));
         });
 
 
