@@ -43,6 +43,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     transactionTable = "transactions_31337_2";
     blockTable = "blocks_31337_3";
     accountTable = "accounts_31337_4";
+    cursorTable = "cursor_31337_5";
   }
 
   // const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
