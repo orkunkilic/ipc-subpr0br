@@ -3,6 +3,9 @@ import { createAccountsTable,createBlocksTable,createTransactionsTable, setUpDB,
 import { HttpJsonRpcConnector, LotusClient, WsJsonRpcConnector } from 'filecoin.js';
 import { Database, Statement } from '@tableland/sdk';
 import { BigNumber } from 'bignumber.js';
+// child process
+import { spawn } from 'child_process';
+const fs = require('fs');
 require('dotenv').config();
 
 declare module 'filecoin.js/builds/dist/providers/Types' {
@@ -20,10 +23,27 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     console.log("Error setting up DBs: " + e);
     return;
   }
-  let transactionTable: string, blockTable: string, accountTable: string, cursorTable: string, crossChainTransactionTable: string;
+  let transactionTable: string = "";
+  let blockTable: string = "";
+  let accountTable: string= "";
+  let cursorTable: string = "";
+  let crossChainTransactionTable: string = "";
+
+  // read tables.json to see if tables exist
+  try {
+    let data = fs.readFileSync('tables.json');
+    let tables = JSON.parse(data);
+    transactionTable = tables.transactionTable;
+    blockTable = tables.blockTable;
+    accountTable = tables.accountTable;
+    cursorTable = tables.cursorTable;
+    crossChainTransactionTable = tables.crossChainTransactionTable;
+  } catch (e) {
+    console.log("Error reading tables.json: " + e);
+  }
 
   // convert it true to create tables, then false
-  if (true) {
+  if (crossChainTransactionTable == "") {
     try {
       transactionTable = await createTransactionsTable(db);
       blockTable = await createBlocksTable(db);
@@ -40,13 +60,20 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     console.log(" accountTable: " + accountTable);
     console.log(" cursorTable: " + cursorTable);
     console.log(" crossChainTransactionTable: " + crossChainTransactionTable);
-  } else {
-    console.log("Tables already exist");
-    transactionTable = "transactions_31337_2";
-    blockTable = "blocks_31337_3";
-    accountTable = "accounts_31337_4";
-    cursorTable = "cursor_31337_5";
-    crossChainTransactionTable = "cross_chain_transactions_31337_6";
+
+    // save names into tables.json
+    let tables = {
+      transactionTable: transactionTable,
+      blockTable: blockTable,
+      accountTable: accountTable,
+      cursorTable: cursorTable,
+      crossChainTransactionTable: crossChainTransactionTable
+    };
+
+    fs.writeFile('tables.json', JSON.stringify(tables), function (err: any) {
+      if (err) throw err;
+      console.log('Saved tables to tables.json');
+    });
   }
 
   // const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
@@ -59,8 +86,23 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
   // wait for 5 seconds to let the everything start up
   await new Promise(resolve => setTimeout(resolve, 5000));
 
+  // run server.js in a child process with args
+  const child = spawn('node', ['./build/server.js', transactionTable, blockTable, accountTable, cursorTable, crossChainTransactionTable]);
+
+  child.stdout.on('data', (data) => {
+    console.log(`Server stdout: ${data}`);
+  });
+
+  child.stderr.on('data', (data) => {
+    console.log(`Server stderr: ${data}`);
+  });
+
   // let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || 645202; // we cannot query 0, rpc disallows it
   let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || -1; // in local, party!
+  // if -1, insert height -1 into cursor table
+  if (lastSyncedHeight == -1) {
+    await insert(db, `INSERT INTO ${cursorTable} (id, height) VALUES (?, ?)`, [0, -1]);
+  }
   console.log("Last synced height: " + lastSyncedHeight);
 
   while (true) {
@@ -246,17 +288,16 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
           console.log(e.message);
         }
 
+        console.log("Saving last synced height: " + i);
+        await update(
+          db,
+          `UPDATE ${cursorTable} SET height = ? WHERE id = 0`,
+          [i]
+        )
+
+
         console.log("==========================================");
       }
-
-      console.log("Saving last synced height: " + head.Height);
-      await insert(
-        db,
-        `INSERT INTO ${cursorTable} (height) VALUES (?)`,
-        [head.Height]
-      );
-
-      lastSyncedHeight = head.Height;
     }
 
     console.log("Waiting for chain to sync");

@@ -134,6 +134,7 @@ export const createCursorTable = async (
   const { meta: createCursorTx} = await db
   .prepare(
     `CREATE TABLE ${cursorPrefix} (
+      id INTEGER PRIMARY KEY,
       height INTEGER
     )`
   ).run();
