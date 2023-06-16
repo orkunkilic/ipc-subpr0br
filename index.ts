@@ -77,10 +77,12 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
   }
 
   // const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
-  const connector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
+  //const connector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
+  const connector = new HttpJsonRpcConnector({ url: 'http://52.29.196.210:1251/rpc/v1' });
   const lotusClient = new LotusClient(connector);
 
-  const rootConnector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:1234/rpc/v1', token: process.env.ROOT_AUTH_TOKEN });
+  //const rootConnector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:1234/rpc/v1', token: process.env.ROOT_AUTH_TOKEN });
+  const rootConnector = new HttpJsonRpcConnector({ url: 'https://api.spacenet.node.glif.io/rpc/v1' });
   const rootLotusClient = new LotusClient(rootConnector);
 
   // wait for 5 seconds to let the everything start up
@@ -134,6 +136,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
               .bind(
                 message.CID['/'],
                 tipSet.Cids[j]['/'],
+                tipSet.Height,
                 message.Version,
                 message.To,
                 message.From,
@@ -223,7 +226,8 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
           const checkpoint = await rootLotusClient.conn.request({method: 'Filecoin.IPCGetCheckpoint', params: [
             {
               "Parent": "/root",
-              "Actor": "t01002"
+              // "Actor": "t01002" // on local
+              "Actor": "t01074" // on spacenet
             },
             i
           ]});

@@ -64,6 +64,7 @@ export const createTransactionsTable = async (
       `CREATE TABLE ${transactionsPrefix} (
         id TEXT,
         block_id TEXT,
+        block_height INTEGER,
         version INTEGER,
         "to" TEXT,
         "from" TEXT,

@@ -83,7 +83,7 @@ app.get('/transactions', async (req: Request, res: Response) => {
 
 app.get('/lasttransactions', async (req: Request, res: Response) => {
     try {
-        let statement = `SELECT * FROM ${transactionsTable} ORDER BY height DESC LIMIT 10`;
+        let statement = `SELECT * FROM ${transactionsTable} ORDER BY block_height DESC LIMIT 10`;
         const results = await query(db, statement);
         res.json(results);
     } catch (e) {
