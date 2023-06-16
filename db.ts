@@ -142,6 +142,33 @@ export const createCursorTable = async (
   return cursorName;
 };
 
+export const createCrossChainTransactionsTable = async (
+  db: Database
+) => {
+  // This is the table's `prefix`; a custom table value prefixed as part of the table's name
+  const crossPrefix: string = "crossChain"
+
+  console.log("Creating a crosschain table...");
+
+  const { meta: createCrossTable} = await db
+  .prepare(
+    `CREATE TABLE ${crossPrefix} (
+      height INTEGER,
+      version INTEGER,
+      "to" TEXT,
+      "from" TEXT,
+      nonce INTEGER,
+      value INTEGER,
+      method INTEGER,
+      params TEXT,
+      PRIMARY KEY (height, "to", "from", nonce)
+    )`
+  ).run();
+  const{ name: crossName} = createCrossTable.txn!;
+  
+  return crossName;
+};
+
 export const insert = async (
     db: Database,
     statement: string,
