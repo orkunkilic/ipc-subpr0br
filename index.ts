@@ -1,5 +1,5 @@
 import { BlockHeader, BlockMessages, Cid, HeadChange, Message, SignedMessage } from 'filecoin.js/builds/dist/providers/Types';
-import { createAccountsTable,createBlocksTable,createTransactionsTable, setUpDB, insert, query, update, createCursorTable, processAccountChanges, batchProcess } from './db';
+import { createAccountsTable,createBlocksTable,createTransactionsTable, setUpDB, insert, query, update, createCursorTable, processAccountChanges, batchProcess, createCrossChainTransactionsTable } from './db';
 import { HttpJsonRpcConnector, LotusClient, WsJsonRpcConnector } from 'filecoin.js';
 import { Database, Statement } from '@tableland/sdk';
 import { BigNumber } from 'bignumber.js';
@@ -20,7 +20,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     console.log("Error setting up DBs: " + e);
     return;
   }
-  let transactionTable: string, blockTable: string, accountTable: string, cursorTable: string;
+  let transactionTable: string, blockTable: string, accountTable: string, cursorTable: string, crossChainTransactionTable: string;
 
   // convert it true to create tables, then false
   if (true) {
@@ -29,6 +29,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
       blockTable = await createBlocksTable(db);
       accountTable = await createAccountsTable(db);
       cursorTable = await createCursorTable(db);
+      crossChainTransactionTable = await createCrossChainTransactionsTable(db);
     } catch (e) {
       console.log("Error creating tables: " + e);
       return;
@@ -38,23 +39,28 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     console.log(" blockTable: " + blockTable);
     console.log(" accountTable: " + accountTable);
     console.log(" cursorTable: " + cursorTable);
+    console.log(" crossChainTransactionTable: " + crossChainTransactionTable);
   } else {
     console.log("Tables already exist");
     transactionTable = "transactions_31337_2";
     blockTable = "blocks_31337_3";
     accountTable = "accounts_31337_4";
     cursorTable = "cursor_31337_5";
+    crossChainTransactionTable = "cross_chain_transactions_31337_6";
   }
 
   // const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
   const connector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
   const lotusClient = new LotusClient(connector);
 
+  const rootConnector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:1234/rpc/v1', token: process.env.ROOT_AUTH_TOKEN });
+  const rootLotusClient = new LotusClient(rootConnector);
+
   // wait for 5 seconds to let the everything start up
   await new Promise(resolve => setTimeout(resolve, 5000));
 
   // let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || 645202; // we cannot query 0, rpc disallows it
-  let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || 0; // in local, party!
+  let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || -1; // in local, party!
   console.log("Last synced height: " + lastSyncedHeight);
 
   while (true) {
@@ -62,6 +68,11 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     if (head.Height > lastSyncedHeight) {
       for (let i = lastSyncedHeight + 1; i <= lastSyncedHeight + 51; i++) {
         console.log("Syncing height: " + i);
+
+        /* console.log(await rootLotusClient.conn.request({method: 'Filecoin.IPCListChildSubnets', params: [
+          "t064"
+        ]})) */
+
         const tipSet = await lotusClient.chain.getTipSetByHeight(i);
         
         const blockInsertStatements: Statement[] = [];
@@ -163,6 +174,76 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
         } catch (e) {
           console.log("Error waiting for blocks to be mined at height: " + i);
           console.log(e);
+        }
+
+        console.log("Checking cross-chain messages at height " + i);
+        try {
+          const checkpoint = await rootLotusClient.conn.request({method: 'Filecoin.IPCGetCheckpoint', params: [
+            {
+              "Parent": "/root",
+              "Actor": "t01002"
+            },
+            i
+          ]});
+
+          if (checkpoint.Data && checkpoint.Data.CrossMsgs && checkpoint.Data.CrossMsgs.CrossMsgs) {
+            const crossMessages = checkpoint.Data.CrossMsgs.CrossMsgs.map((message: any) => (
+              {
+                from: message.From.RawAddress,
+                to: message.To.RawAddress,
+                Method: message.Method,
+                Params: message.Params,
+                Value: message.Value,
+                Nonce: message.Nonce,
+              }
+            ))
+            
+            const messageInsertStatements: Statement[] = [];
+            
+            for(let k = 0; k <= crossMessages.length - 1; k++) {
+              const message = crossMessages[k];
+              const messageInsertStatement = db
+                .prepare(`INSERT INTO ${crossChainTransactionTable} (height, version, "to", "from", nonce, value, method, params) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+                .bind(
+                  i,
+                  message.Version,
+                  message.To,
+                  message.From,
+                  message.Nonce,
+                  message.Value,
+                  message.Method,
+                  "message.Params"
+                );
+              messageInsertStatements.push(messageInsertStatement);
+
+            }
+
+            if (messageInsertStatements.length === 0) {
+              console.log("No cross-chain messages to insert at height: " + i);
+              continue;
+            } else {
+              console.log("Inserting cross-chain messages at height: " + i);
+              const results = await batchProcess(db, messageInsertStatements);
+              if (!results) {
+                console.log("Error inserting cross-chain messages at height: " + i)
+                continue;
+              }
+
+              console.log("Waiting for cross-chain messages to be mined at height: " + i);
+
+              try {
+                await Promise.all(results.map(result => result.meta?.txn?.wait()));
+              } catch (e) {
+                console.log("Error waiting for cross-chain messages to be mined at height: " + i);
+                console.log(e);
+              }
+            }
+            
+          } else {
+            console.log("No cross-chain messages to insert at height: " + i);
+          }
+        } catch (e: any) {
+          console.log(e.message);
         }
 
         console.log("==========================================");
