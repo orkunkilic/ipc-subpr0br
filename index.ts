@@ -298,6 +298,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
           `UPDATE ${cursorTable} SET height = ? WHERE id = 0`,
           [i]
         )
+        lastSyncedHeight = i;
 
 
         console.log("==========================================");
