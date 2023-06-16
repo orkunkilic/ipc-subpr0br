@@ -21,6 +21,41 @@ const setup = async () => {
 
 setup();
 
+app.get('/crosschain', async (req: Request, res: Response) => {
+    const transactionId = req.query.transactionId as string;
+    try {
+        let statement = `SELECT * FROM ${crossChainTable} WHERE id = "${transactionId}"`;
+        const results = await query(db, statement);
+        res.json(results);
+    } catch (e) {
+        console.log("Error getting crosschain: " + e);
+        res.status(500).json({ error: 'An error occurred while querying the crosschain table' });
+    }
+});
+
+app.get('/crosschains', async (req: Request, res: Response) => {
+    let block_id = req.query.block_id as string;
+    try {
+        let statement = `SELECT * FROM ${crossChainTable} WHERE block_id = "${block_id}"`;
+        const results = await query(db, statement);
+        res.json(results);
+    } catch (e) {
+        console.log("Error getting crosschain: " + e);
+        res.status(500).json({ error: 'An error occurred while querying the crosschain table' });
+    }
+});
+
+app.get('/lastcrosschains', async (req: Request, res: Response) => {
+    try {
+        let statement = `SELECT * FROM ${crossChainTable} ORDER BY height DESC LIMIT 10`;
+        console.log(statement);
+        const results = await query(db, statement);
+        res.json(results);
+    } catch (e) {
+        console.log("Error getting crosschain: " + e);
+        res.status(500).json({ error: 'An error occurred while querying the crosschain table' });
+    }
+});
 
 app.get('/transaction', async (req: Request, res: Response) => {
     const transactionId = req.query.transactionId as string;

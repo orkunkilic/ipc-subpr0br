@@ -87,7 +87,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
   await new Promise(resolve => setTimeout(resolve, 5000));
 
   // run server.js in a child process with args
-  const child = spawn('node', ['./build/server.js', transactionTable, blockTable, accountTable, cursorTable, crossChainTransactionTable]);
+  const child = spawn('node', ['./build/server.js', transactionTable, blockTable, accountTable, crossChainTransactionTable]);
 
   child.stdout.on('data', (data) => {
     console.log(`Server stdout: ${data}`);
