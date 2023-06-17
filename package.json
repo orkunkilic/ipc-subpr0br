@@ -1,7 +1,7 @@
 {
   "scripts": {
     "tableland": "npx local-tableland",
-    "build": "rimraf build && tsc",
+    "build": "rimraf build && tsc && npm run build-frontend",
     "build-frontend": "cd filecoin-indexer-frontend && yarn && yarn build",
     "start": "node build/index.js",
     "wallet": "node build/wallet.js",
