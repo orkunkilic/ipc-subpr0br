@@ -78,12 +78,14 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
 
   // const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
   //const connector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
-  const connector = new HttpJsonRpcConnector({ url: 'http://52.29.196.210:1251/rpc/v1' });
+  const connector = new HttpJsonRpcConnector({ url: process.env.SUBNET_RPC! });
   const lotusClient = new LotusClient(connector);
 
   //const rootConnector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:1234/rpc/v1', token: process.env.ROOT_AUTH_TOKEN });
-  const rootConnector = new HttpJsonRpcConnector({ url: 'https://api.spacenet.node.glif.io/rpc/v1' });
+  const rootConnector = new HttpJsonRpcConnector({ url: process.env.ROOT_RPC! });
   const rootLotusClient = new LotusClient(rootConnector);
+
+  console.log("Connected to Lotus: ", await lotusClient.common.version());
 
   // wait for 5 seconds to let the everything start up
   await new Promise(resolve => setTimeout(resolve, 5000));
@@ -103,6 +105,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
   let lastSyncedHeight = -1;
   try {
     lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || -1; // in local, party!
+    console.log("Last synced height: " + lastSyncedHeight);
   } catch (e) {
     console.log("Error querying cursor table: " + e);
     // recreate tables

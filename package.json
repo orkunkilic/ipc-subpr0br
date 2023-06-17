@@ -4,6 +4,7 @@
     "build": "rimraf build && tsc && npm run build-frontend",
     "build-frontend": "cd filecoin-indexer-frontend && yarn && yarn build",
     "start": "node build/index.js",
+    "full": "(nohup npx local-tableland > tableland.log &) && sleep 5 && node build/index.js",
     "wallet": "node build/wallet.js",
     "server": "node build/server.js",
     "develop": "tsc -w & nodemon build/index.js"

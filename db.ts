@@ -12,37 +12,11 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
   }
 }
 
-
 const privateKey = process.env.PRIVATE_KEY;
-
-interface TransactionsSchema {
-    id: string;
-    Version?: number;
-    To: string;
-    From: string;
-    Nonce: number;
-    Value: BigNumber;
-    GasLimit: number;
-    GasFeeCap: BigNumber;
-    GasPremium: BigNumber;
-    Method: number;
-    Params: string;
-}
-
-interface BlocksSchema {
-    id: string;
-    Height: number;    
-}
-
-interface AccountsSchema {
-    Address: string;
-    Nonce: number;
-    Balances: number;
-}
 
 export const setUpDB = async () => {
     const wallet = new Wallet(privateKey!);
-    const provider = new providers.JsonRpcProvider("http://127.0.0.1:8545"); // Local tableland (hardhat) node
+    const provider = new providers.JsonRpcProvider("http://146.190.178.83:8545"); // Local tableland (hardhat) node
     const baseSigner = wallet.connect(provider);
     const signer = new NonceManager(baseSigner);
   
