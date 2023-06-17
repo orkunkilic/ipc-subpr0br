@@ -1,3 +1,6 @@
 [submodule "filecoin-indexer-frontend"]
 	path = filecoin-indexer-frontend
 	url = https://github.com/uok825/filecoin-indexer-frontend
+[submodule "ipc-subpr0br-cli"]
+	path = ipc-subpr0br-cli
+	url = https://github.com/orkunkilic/ipc-subpr0br-cli
