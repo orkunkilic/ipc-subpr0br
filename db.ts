@@ -16,7 +16,7 @@ const privateKey = process.env.PRIVATE_KEY;
 
 export const setUpDB = async () => {
     const wallet = new Wallet(privateKey!);
-    const provider = new providers.JsonRpcProvider("http://146.190.178.83:8545"); // Local tableland (hardhat) node
+    const provider = new providers.JsonRpcProvider(process.env.TABLELAND_RPC); // Local tableland (hardhat) node
     const baseSigner = wallet.connect(provider);
     const signer = new NonceManager(baseSigner);
   
