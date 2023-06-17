@@ -1,0 +1,3 @@
+[submodule "filecoin-indexer-frontend"]
+	path = filecoin-indexer-frontend
+	url = https://github.com/uok825/filecoin-indexer-frontend
