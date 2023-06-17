@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { query, setUpDB } from './db';
 import { Database } from '@tableland/sdk';
+import path from 'path';
 
 export type Request = express.Request;
 export type Response = express.Response;
@@ -11,7 +12,7 @@ let db: Database;
 const app = express()
 const port = 3002
 
-app.use(cors())
+//app.use(cors());
 
 let transactionsTable: string, blocksTable: string, accountsTable: string, crossChainTable: string;
 
@@ -21,7 +22,7 @@ const setup = async () => {
 
 setup();
 
-app.get('/crosschain', async (req: Request, res: Response) => {
+app.get('/api/crosschain', async (req: Request, res: Response) => {
     const transactionId = req.query.transactionId as string;
     try {
         let statement = `SELECT * FROM ${crossChainTable} WHERE id = "${transactionId}"`;
@@ -33,7 +34,7 @@ app.get('/crosschain', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/crosschains', async (req: Request, res: Response) => {
+app.get('/api/crosschains', async (req: Request, res: Response) => {
     let block_id = req.query.block_id as string;
     try {
         let statement = `SELECT * FROM ${crossChainTable} WHERE block_id = "${block_id}"`;
@@ -45,7 +46,7 @@ app.get('/crosschains', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/lastcrosschains', async (req: Request, res: Response) => {
+app.get('/api/lastcrosschains', async (req: Request, res: Response) => {
     try {
         let statement = `SELECT * FROM ${crossChainTable} ORDER BY height DESC LIMIT 10`;
         console.log(statement);
@@ -57,7 +58,7 @@ app.get('/lastcrosschains', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/transaction', async (req: Request, res: Response) => {
+app.get('/api/transaction', async (req: Request, res: Response) => {
     const transactionId = req.query.transactionId as string;
     try {
         let statement = `SELECT * FROM ${transactionsTable} WHERE id = "${transactionId}"`;
@@ -69,7 +70,7 @@ app.get('/transaction', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/transactions', async (req: Request, res: Response) => {
+app.get('/api/transactions', async (req: Request, res: Response) => {
     let block_id = req.query.block_id as string;
     try {
         let statement = `SELECT * FROM ${transactionsTable} WHERE block_id = "${block_id}"`;
@@ -81,7 +82,7 @@ app.get('/transactions', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/lasttransactions', async (req: Request, res: Response) => {
+app.get('/api/lasttransactions', async (req: Request, res: Response) => {
     try {
         let statement = `SELECT * FROM ${transactionsTable} ORDER BY block_height DESC LIMIT 10`;
         const results = await query(db, statement);
@@ -92,7 +93,7 @@ app.get('/lasttransactions', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/block', async (req: Request, res: Response) => {
+app.get('/api/block', async (req: Request, res: Response) => {
   const block_id = req.query.block_id as string;
   try {
     // FIX: your query is wrong.
@@ -105,7 +106,7 @@ app.get('/block', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/lastblocks', async (req: Request, res: Response) => {
+app.get('/api/lastblocks', async (req: Request, res: Response) => {
     try {
         let statement = `SELECT * FROM ${blocksTable} ORDER BY height DESC LIMIT 10`;
         const results = await query(db, statement);
@@ -116,7 +117,7 @@ app.get('/lastblocks', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/account', async (req: Request, res: Response) => {
+app.get('/api/account', async (req: Request, res: Response) => {
     const accountId = req.query.accountId as string;
     try {
         let statement = `SELECT * FROM ${accountsTable} WHERE address = "${accountId}"`;
@@ -128,7 +129,7 @@ app.get('/account', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/ownedtransactions', async (req: Request, res: Response) => {
+app.get('/api/ownedtransactions', async (req: Request, res: Response) => {
     const accountId = req.query.accountId as string;
     try {
         let statement = `SELECT * FROM ${transactionsTable} WHERE "from" = "${accountId}" or "to" = "${accountId}"`;
@@ -140,6 +141,12 @@ app.get('/ownedtransactions', async (req: Request, res: Response) => {
     }
 });
 
+
+app.use(express.static(path.resolve(__dirname, '..', 'filecoin-indexer-frontend', 'build')));
+app.get('/*', (req: Request, res: Response) => {
+    res.sendFile(path.resolve(__dirname, '..', 'filecoin-indexer-frontend', 'build', 'index.html'));
+})
+
 const args = process.argv.slice(2);
 transactionsTable = args[0];
 blocksTable = args[1];
@@ -148,17 +155,4 @@ crossChainTable = args[3];
 
 app.listen(port, () => {
   console.log(`API listening on port ${port}`)
-})
-
-/* export const runServer = (
-    _transactionsTable: string,
-    _blocksTable: string,
-    _accountsTable: string,
-    _crossChainTable: string,
-) => {
-
-
-    app.listen(port, () => {
-        console.log(`API listening on port ${port}`)
-    })
-} */
+});

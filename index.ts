@@ -100,7 +100,43 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
   });
 
   // let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || 645202; // we cannot query 0, rpc disallows it
-  let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || -1; // in local, party!
+  let lastSyncedHeight = -1;
+  try {
+    lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || -1; // in local, party!
+  } catch (e) {
+    console.log("Error querying cursor table: " + e);
+    // recreate tables
+    try {
+      transactionTable = await createTransactionsTable(db);
+      blockTable = await createBlocksTable(db);
+      accountTable = await createAccountsTable(db);
+      cursorTable = await createCursorTable(db);
+      crossChainTransactionTable = await createCrossChainTransactionsTable(db);
+    } catch (e) {
+      console.log("Error creating tables: " + e);
+      return;
+    }
+    console.log("Tables: ");
+    console.log(" transactionTable: " + transactionTable);
+    console.log(" blockTable: " + blockTable);
+    console.log(" accountTable: " + accountTable);
+    console.log(" cursorTable: " + cursorTable);
+    console.log(" crossChainTransactionTable: " + crossChainTransactionTable);
+
+    // save names into tables.json
+    let tables = {
+      transactionTable: transactionTable,
+      blockTable: blockTable,
+      accountTable: accountTable,
+      cursorTable: cursorTable,
+      crossChainTransactionTable: crossChainTransactionTable
+    };
+
+    fs.writeFile('tables.json', JSON.stringify(tables), function (err: any) {
+      if (err) throw err;
+      console.log('Saved tables to tables.json');
+    });
+  }
   // if -1, insert height -1 into cursor table
   if (lastSyncedHeight == -1) {
     await insert(db, `INSERT INTO ${cursorTable} (id, height) VALUES (?, ?)`, [0, -1]);
