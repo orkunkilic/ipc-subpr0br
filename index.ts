@@ -76,6 +76,9 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
     });
   }
 
+  // wait for 5 seconds to let the everything start up
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
   // const connector = new HttpJsonRpcConnector({ url: 'https://api.calibration.node.glif.io/rpc/v1'});
   //const connector = new HttpJsonRpcConnector({ url: 'http://146.190.178.83:2001/rpc/v1', token: process.env.AUTH_TOKEN });
   const connector = new HttpJsonRpcConnector({ url: process.env.SUBNET_RPC! });
@@ -125,6 +128,10 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
       if (err) throw err;
       console.log('Saved tables to tables.json');
     });
+
+      
+    // wait for 5 seconds to let the everything start up
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
 
   // wait for 5 seconds to let the everything start up
