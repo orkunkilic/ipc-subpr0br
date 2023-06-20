@@ -43,7 +43,7 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
   }
 
   // convert it true to create tables, then false
-  if (crossChainTransactionTable == "") {
+  if (crossChainTransactionTable == "" || !crossChainTransactionTable) {
     try {
       transactionTable = await createTransactionsTable(db);
       blockTable = await createBlocksTable(db);
@@ -87,20 +87,6 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
 
   console.log("Connected to Lotus: ", await lotusClient.common.version());
 
-  // wait for 5 seconds to let the everything start up
-  await new Promise(resolve => setTimeout(resolve, 5000));
-
-  // run server.js in a child process with args
-  const child = spawn('node', ['./build/server.js', transactionTable, blockTable, accountTable, crossChainTransactionTable]);
-
-  child.stdout.on('data', (data) => {
-    console.log(`Server stdout: ${data}`);
-  });
-
-  child.stderr.on('data', (data) => {
-    console.log(`Server stderr: ${data}`);
-  });
-
   // let lastSyncedHeight = ((await query(db, `SELECT height FROM ${cursorTable}`)) as any[])[0]?.height || 645202; // we cannot query 0, rpc disallows it
   let lastSyncedHeight = -1;
   try {
@@ -140,6 +126,21 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
       console.log('Saved tables to tables.json');
     });
   }
+
+  // wait for 5 seconds to let the everything start up
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
+  // run server.js in a child process with args
+  const child = spawn('node', ['./build/server.js', transactionTable, blockTable, accountTable, crossChainTransactionTable]);
+
+  child.stdout.on('data', (data) => {
+    console.log(`Server stdout: ${data}`);
+  });
+
+  child.stderr.on('data', (data) => {
+    console.log(`Server stderr: ${data}`);
+  });
+
   // if -1, insert height -1 into cursor table
   if (lastSyncedHeight == -1) {
     await insert(db, `INSERT INTO ${cursorTable} (id, height) VALUES (?, ?)`, [0, -1]);
