@@ -197,8 +197,12 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
               );
             messageInsertStatements.push(messageInsertStatement);
 
+            // from and to balance from rpc
+            const fromBalance = await lotusClient.wallet.balance(message.From);
+            const toBalance = await lotusClient.wallet.balance(message.To);
+
             // process accounts
-            await processAccountChanges(message, db, accountTable);
+            await processAccountChanges(message, db, accountTable, fromBalance, toBalance);
           };
 
           for(let k = 0; k <= blockMessages.SecpkMessages.length - 1; k++) {
@@ -221,8 +225,12 @@ declare module 'filecoin.js/builds/dist/providers/Types' {
             );
             messageInsertStatements.push(messageInsertStatement);
 
+            // from and to balance from rpc
+            const fromBalance = await lotusClient.wallet.balance(message.Message.From);
+            const toBalance = await lotusClient.wallet.balance(message.Message.To);
+
             // process accounts
-            await processAccountChanges(message.Message, db, accountTable);
+            await processAccountChanges(message.Message, db, accountTable, fromBalance, toBalance);
           }
 
           console.log("Inserting messages at block id: " + tipSet.Cids[j]['/']);

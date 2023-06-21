@@ -90,7 +90,7 @@ export const createAccountsTable = async (
     `CREATE TABLE ${accountsPrefix} (
       address TEXT PRIMARY KEY,
       nonce INTEGER,
-      balance INTEGER
+      balance TEXT
     )`
   ).run();
   const{ name: accountsName} = createAccountsTx.txn!;
@@ -220,6 +220,8 @@ export const processAccountChanges = async (
   message: Message,
   db: Database,
   accountsTable: string,
+  fromBalanceChain: any,
+  toBalanceChain: any
 ) => {
   console.log("Processing account changes for message: " + message.CID['/']);
 
@@ -242,13 +244,13 @@ export const processAccountChanges = async (
   const createStatements: Statement[] = [];
 
   if (!fromAccount) {
-    console.log("Creating account for: " + from);
-    createStatements.push(db.prepare(`INSERT INTO ${accountsTable} (address, nonce, balance) VALUES (?, ?, ?)`).bind([from, 0, 0]));
+    console.log("Creating account for: ", from, " with balance: ", fromBalanceChain.toString());
+    createStatements.push(db.prepare(`INSERT INTO ${accountsTable} (address, nonce, balance) VALUES (?, ?, ?)`).bind([from, 0, fromBalanceChain.toString()]));
   }
 
   if (!toAccount) {
-    console.log("Creating account for: " + to);
-    createStatements.push(db.prepare(`INSERT INTO ${accountsTable} (address, nonce, balance) VALUES (?, ?, ?)`).bind([to, 0, 0]));
+    console.log("Creating account for: ", to, " with balance: ", toBalanceChain.toString());
+    createStatements.push(db.prepare(`INSERT INTO ${accountsTable} (address, nonce, balance) VALUES (?, ?, ?)`).bind([to, 0, toBalanceChain.toString()]));
   }
   if (createStatements.length > 0) {
     const createResults = await batchProcess(db, createStatements);
@@ -261,13 +263,13 @@ export const processAccountChanges = async (
     try {
       await Promise.all(createResults.map(result => result.meta?.txn?.wait()));
     } catch (e) {
-      console.log("Error waiting for account creation");
+      console.log("Error waiting for account creation", e);
       return false;
     }
   }
 
-  const fromBalance = new BigNumber(fromAccount?.balances || 0);
-  const toBalance = new BigNumber(toAccount?.balances || 0);
+  const fromBalance = new BigNumber(fromAccount?.balances || fromBalanceChain.toString());
+  const toBalance = new BigNumber(toAccount?.balances || toBalanceChain.toString());
 
   const newFromBalance = fromBalance.minus(totalPaid);
   const newToBalance = toBalance.plus(value);
